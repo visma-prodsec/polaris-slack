@@ -27,12 +27,16 @@ def main():
     polaris = Polaris(polaris_url, token)
     slack = Slack(slack_webhook_url)
 
-    projects_with_issues = polaris.GetProjectsAndIssues()
+    filter = {
+        'only-security': environ.get('POLARIS_FILTER_ONLY_SECURITY'),
+        'only-untriaged': environ.get('POLARIS_FILTER_ONLY_UNTRIAGED'),
+    }
+    projects_with_issues = polaris.GetProjectsAndIssues(filter)
 
     if dry_run:
         print(json.dumps(projects_with_issues, indent=2))
     else:
-        slack.SendSummaryPerProjects(projects_with_issues)
+        slack.SendSummaryPerProjects(projects_with_issues, filter)
 
 if __name__ == '__main__':
     main()
