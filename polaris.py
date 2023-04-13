@@ -4,6 +4,8 @@ import math
 import aiohttp
 import asyncio
 
+import json
+
 ISSUE_SEVERITY_RANKS = {
     "Critical": 0,
     "High": 1,
@@ -128,8 +130,19 @@ class Polaris:
     def FormatIssueUrl(self, project_id, branch_id, revision_id, issue_id):
         return self.getFullUrl(f'/projects/{project_id}/branches/{branch_id}/revisions/{revision_id}/issues/{issue_id}')
 
-    def FormatProjectUrl(self, project_id, branch_id, filters='filter=issue[status][%24eq]%3Dopened%26issue[taxonomy][taxonomy-type][issue-kind][taxon][%24eq]%3Dsecurity'):
-        return self.getFullUrl(f'/projects/{project_id}/branches/{branch_id}/issues?{filters}')
+    def FormatProjectUrl(self, project_id, branch_id, filter):
+        filters = [
+            "issue[status][$eq]=opened",
+        ]
+
+        if filter['only-security']:
+            filters += ["issue[taxonomy][taxonomy-type][issue-kind][taxon][$eq]=security"]
+
+        if filter['only-untriaged']:
+            filters += ["issue[triage-status][$eq]=not-triaged"]
+
+        filter_as_query = urllib.parse.quote('&'.join(filters))
+        return self.getFullUrl(f"/projects/{project_id}/branches/{branch_id}/issues?filter={filter_as_query}")
 
     async def _NormalizedProjectAndIssues(self, session, runs, project_id, branch_id, project_name, filter):
         issues = await self._getProjectIssues(session, project_id, branch_id, filter)
@@ -137,11 +150,14 @@ class Polaris:
         data = issues['data']
         if len(data) > 0:
             print(project_name)
+            untriaged_filter = filter.copy()
+            untriaged_filter['only-untriaged'] = True
             return {
                 'project_name': project_name,
                 'project_id': project_id,
                 'branch_id': branch_id,
-                'direct-link': self.FormatProjectUrl(project_id, branch_id),
+                'direct-link': self.FormatProjectUrl(project_id, branch_id, filter),
+                'direct-link-untriaged': self.FormatProjectUrl(project_id, branch_id, untriaged_filter),
                 'issues': self.NormalizeIssues(data, issues['included'], runs, project_id, branch_id)
             }
 
