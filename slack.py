@@ -40,14 +40,24 @@ class Slack:
 
         return issue_counts
 
-    def SendSummaryPerProjects(self, normalized_projects):
+    def SendSummaryPerProjects(self, normalized_projects, filter):
         total_issues = 0
 
         for project in normalized_projects:
             total_issues += len(project['issues'])
 
+        issue_descriptions = []
+
+        if filter.get('only-security'):
+            issue_descriptions += ["security"]
+
+        if filter.get('only-untriaged'):
+            issue_descriptions += ["untriaged"]
+
+        issue_description = ' '.join(issue_descriptions)
+
         self.appendOrSend(SectionBlock(
-            text=MarkdownTextObject(text=f"{total_issues} issues in {len(normalized_projects)} polaris projects")))
+            text=MarkdownTextObject(text=f"{total_issues} {issue_description} issues in {len(normalized_projects)} polaris projects")))
 
         for project in normalized_projects:
             issues = project['issues']
@@ -92,5 +102,3 @@ class Slack:
                 self.appendOrSend(SectionBlock(text=MarkdownTextObject(text=f"<{issue['direct-link']}|{issue['path']}>", verbatim=False)))
 
         self.flush()
-
-

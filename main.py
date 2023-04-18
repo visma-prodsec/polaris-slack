@@ -4,6 +4,7 @@ from os import environ
 
 from polaris import Polaris
 from slack import Slack
+from google import Google
 
 logger = logging.getLogger('polaris-slack')
 
@@ -18,21 +19,31 @@ def main():
     if not polaris_url or not token:
         exit(1)
 
-    dry_run = False
     slack_webhook_url = environ.get('SLACK_WEBHOOK_URL')
-    if not slack_webhook_url:
-        logger.warning("Environment SLACK_WEBHOOK is unset, just outputting issues to console.")
-        dry_run = True
+    google_spaces_url = environ.get('GOOGLE_SPACES_URL')
+    if (not slack_webhook_url) and (not google_spaces_url):
+        logger.warning("Environment SLACK_WEBHOOK and GOOGLE_SPACES_URL is unset, just outputting issues to console.")
 
     polaris = Polaris(polaris_url, token)
-    slack = Slack(slack_webhook_url)
 
-    projects_with_issues = polaris.GetProjectsAndIssues()
+    filter = {
+        'only-security': environ.get('POLARIS_FILTER_ONLY_SECURITY'),
+        'only-untriaged': environ.get('POLARIS_FILTER_ONLY_UNTRIAGED'),
+    }
+    filter_untriaged = filter.copy()
+    filter_untriaged['only-untriaged'] = True
 
-    if dry_run:
-        print(json.dumps(projects_with_issues, indent=2))
+    projects_with_issues = polaris.GetProjectsAndIssues(filter)
+
+    if slack_webhook_url:
+        slack = Slack(slack_webhook_url)
+        slack.SendSummaryPerProjects(projects_with_issues, filter)
+    elif google_spaces_url:
+        projects_with_untriaged_issues = polaris.GetProjectsAndIssues(filter_untriaged)
+        google = Google(google_spaces_url)
+        google.SendSummaryMessage(projects_with_issues, projects_with_untriaged_issues, filter)
     else:
-        slack.SendSummaryPerProjects(projects_with_issues)
+        print(json.dumps(projects_with_issues, indent=2))
 
 if __name__ == '__main__':
     main()

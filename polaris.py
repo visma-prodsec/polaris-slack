@@ -4,6 +4,8 @@ import math
 import aiohttp
 import asyncio
 
+import json
+
 ISSUE_SEVERITY_RANKS = {
     "Critical": 0,
     "High": 1,
@@ -17,7 +19,7 @@ class Polaris:
         self._baseurl = url
         self._client = requests.Session()
         self._jwt = self.getJwt(token)
-    
+
     def __del__(self):
         self._client.close()
 
@@ -73,12 +75,30 @@ class Polaris:
 
         return response.json()
 
-    async def _getPaginatedIssuePage(self, session, project_id, branch_id, limit, offset):
-        async with session.get(self.getFullUrl('/api/query/v1/issues') + f'?page[limit]={limit}&project-id={project_id}&branch-id={branch_id}&page[offset]={offset}&filter[issue][status][$eq]=opened&filter[issue][dismissed][$eq]=false&include[issue][]=severity&include[issue][]=issue-kind', headers=self._getHeaders()) as response:
+    async def _getPaginatedIssuePage(self, session, project_id, branch_id, limit, offset, filter):
+        query_args = [
+            f"page[limit]={limit}",
+            f"page[offset]={offset}",
+            f"project-id={project_id}",
+            f"branch-id={branch_id}",
+            "filter[issue][status][$eq]=opened",
+            "filter[issue][dismissed][$eq]=false",
+            "include[issue][]=severity",
+            "include[issue][]=issue-kind",
+        ]
+
+        if filter.get('only-security', False):
+            query_args += ["filter[issue][taxonomy][taxonomy-type][issue-kind][taxon][$eq]=security"]
+
+        if filter.get('only-untriaged', False):
+            query_args += ["filter[issue][triage-status][$eq]=not-triaged"]
+
+        request_url = self.getFullUrl('/api/query/v1/issues' + '?' + '&'.join(query_args))
+        async with session.get(request_url, headers=self._getHeaders()) as response:
             return await response.json()
-    
-    async def _getPaginatedIssues(self, session, project_id, branch_id):
-        first_page = await self._getPaginatedIssuePage(session, project_id, branch_id, 500, 0)
+
+    async def _getPaginatedIssues(self, session, project_id, branch_id, filter):
+        first_page = await self._getPaginatedIssuePage(session, project_id, branch_id, 500, 0, filter)
         yield first_page
 
         total = first_page['meta']['total']
@@ -86,13 +106,13 @@ class Polaris:
 
         if total > len(first_page['data']):
             for page in range(1, math.ceil(total/limit)):
-                yield self._getPaginatedIssuePage(session, project_id, branch_id, limit, page*limit)
-        
+                yield self._getPaginatedIssuePage(session, project_id, branch_id, limit, page*limit, filter)
 
-    async def _getProjectIssues(self, session, project_id, branch_id):
+
+    async def _getProjectIssues(self, session, project_id, branch_id, filter):
         data = []
         included = []
-        pages = self._getPaginatedIssues(session, project_id, branch_id)
+        pages = self._getPaginatedIssues(session, project_id, branch_id, filter)
         try:
             async for page in pages:
                 page_data = page['data']
@@ -110,29 +130,43 @@ class Polaris:
     def FormatIssueUrl(self, project_id, branch_id, revision_id, issue_id):
         return self.getFullUrl(f'/projects/{project_id}/branches/{branch_id}/revisions/{revision_id}/issues/{issue_id}')
 
-    def FormatProjectUrl(self, project_id, branch_id, filters='filter=issue[status][%24eq]%3Dopened%26issue[taxonomy][taxonomy-type][issue-kind][taxon][%24eq]%3Dsecurity'):
-        return self.getFullUrl(f'/projects/{project_id}/branches/{branch_id}/issues?{filters}')
+    def FormatProjectUrl(self, project_id, branch_id, filter):
+        filters = [
+            "issue[status][$eq]=opened",
+        ]
 
-    async def _NormalizedProjectAndIssues(self, session, runs, project_id, branch_id, project_name):
-        issues = await self._getProjectIssues(session, project_id, branch_id)
+        if filter['only-security']:
+            filters += ["issue[taxonomy][taxonomy-type][issue-kind][taxon][$eq]=security"]
+
+        if filter['only-untriaged']:
+            filters += ["issue[triage-status][$eq]=not-triaged"]
+
+        filter_as_query = urllib.parse.quote('&'.join(filters))
+        return self.getFullUrl(f"/projects/{project_id}/branches/{branch_id}/issues?filter={filter_as_query}")
+
+    async def _NormalizedProjectAndIssues(self, session, runs, project_id, branch_id, project_name, filter):
+        issues = await self._getProjectIssues(session, project_id, branch_id, filter)
 
         data = issues['data']
         if len(data) > 0:
             print(project_name)
+            untriaged_filter = filter.copy()
+            untriaged_filter['only-untriaged'] = True
             return {
                 'project_name': project_name,
                 'project_id': project_id,
                 'branch_id': branch_id,
-                'direct-link': self.FormatProjectUrl(project_id, branch_id),
+                'direct-link': self.FormatProjectUrl(project_id, branch_id, filter),
+                'direct-link-untriaged': self.FormatProjectUrl(project_id, branch_id, untriaged_filter),
                 'issues': self.NormalizeIssues(data, issues['included'], runs, project_id, branch_id)
             }
 
-    def GetProjectsAndIssues(self):
+    def GetProjectsAndIssues(self, filter = None):
         loop = asyncio.get_event_loop()
-        results = loop.run_until_complete(self._GetProjectsAndIssues())
+        results = loop.run_until_complete(self._GetProjectsAndIssues(filter))
         return results
 
-    async def _GetProjectsAndIssues(self):
+    async def _GetProjectsAndIssues(self, filter):
         projects = self._getProjects()
 
         project_include = []
@@ -151,8 +185,8 @@ class Polaris:
         project_with_issues = []
 
         async with aiohttp.ClientSession() as session:
-            project_with_issues = await asyncio.gather(*[self._NormalizedProjectAndIssues(session, runs, projectandinclude['project_id'], projectandinclude['branch_id'], projectandinclude['project_name']) for projectandinclude in project_include])
-        
+            project_with_issues = await asyncio.gather(*[self._NormalizedProjectAndIssues(session, runs, projectandinclude['project_id'], projectandinclude['branch_id'], projectandinclude['project_name'], filter) for projectandinclude in project_include])
+
         # Remove None from list, None represents projects that didn't have any issues
         project_with_issues = [x for x in project_with_issues if x is not None]
 
