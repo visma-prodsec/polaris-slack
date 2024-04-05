@@ -1,0 +1,18 @@
+image:
+  registry: "docker.registry"
+  tag: "latest"
+
+url: "https://www.example.com"
+token: "token"
+webhook: "https://www.example.com"
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+cron:
+  schedule: "0 10 * * 5"                              # Schedule for the CronJob every Friday at 10:00 AM

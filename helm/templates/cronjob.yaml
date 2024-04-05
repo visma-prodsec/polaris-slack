@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: polaris-slack
+  namespace: vf-utils                                                  # Namespace where the CronJob is created
+spec:
+  concurrencyPolicy: Forbid                                          # Forbid, Replace, Allow
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata:
+      name: polaris-slack
+    spec:
+      template:
+        metadata:
+        spec:
+          containers:
+          - image: "{{ .Values.image.registry }}:{{ .Values.image.tag }}"                                    # Image to be used for the job
+            env:
+            - name: POLARIS_URL
+              value: {{ .Values.url }}                   # URL of the Polaris API endpoint
+            - name: POLARIS_TOKEN
+              value: {{ .Values.token}}                # Token to authenticate with the Polaris API
+            - name: SLACK_WEBHOOK_URL
+              value: {{ .Values.webhook }}         # URL of the Slack webhook
+            imagePullPolicy: IfNotPresent
+            name: polaris-slack
+            resources:
+              requests:
+                memory: {{ .Values.resources.requests.memory }}
+                cpu: {{ .Values.resources.requests.cpu }}
+              limits:
+                memory: {{ .Values.resources.limits.memory }}
+                cpu: {{ .Values.resources.limits.cpu }}
+            terminationMessagePath: /dev/termination-log
+            terminationMessagePolicy: File
+          dnsPolicy: ClusterFirst
+          restartPolicy: Never
+          schedulerName: default-scheduler
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+  schedule: {{ .Values.cron.schedule }}
+  successfulJobsHistoryLimit: 0
+  suspend: false
+status: {}
