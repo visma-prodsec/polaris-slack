@@ -2,10 +2,10 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: polaris-slack
-  namespace: vf-utils                                                  # Namespace where the CronJob is created
+  namespace: default                                                # Namespace where the CronJob is created
 spec:
   concurrencyPolicy: Forbid                                          # Forbid, Replace, Allow
-  failedJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1                                            # Number of failed jobs to keep
   jobTemplate:
     metadata:
       name: polaris-slack
@@ -40,6 +40,6 @@ spec:
             runAsNonRoot: true
             runAsUser: 1000
   schedule: {{ .Values.cron.schedule }}
-  successfulJobsHistoryLimit: 0
+  successfulJobsHistoryLimit: 0                                        # Number of successful jobs to keep
   suspend: false
 status: {}
