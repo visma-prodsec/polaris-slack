@@ -93,6 +93,9 @@ class Polaris:
         if filter.get('only-untriaged', False):
             query_args += ["filter[issue][triage-status][$eq]=not-triaged"]
 
+        if filter['only-med-high']:
+            query_args += ["filter[issue][taxonomy][taxonomy-type][severity][taxon][%24one-of]=[high,medium]"]
+
         request_url = self.getFullUrl('/api/query/v1/issues' + '?' + '&'.join(query_args))
         async with session.get(request_url, headers=self._getHeaders()) as response:
             return await response.json()
@@ -140,6 +143,9 @@ class Polaris:
 
         if filter['only-untriaged']:
             filters += ["issue[triage-status][$eq]=not-triaged"]
+
+        if filter['only-med-high']:
+            filters += ["filter[issue][taxonomy][taxonomy-type][severity][taxon][%24one-of]=[high,medium]"]
 
         filter_as_query = urllib.parse.quote('&'.join(filters))
         return self.getFullUrl(f"/projects/{project_id}/branches/{branch_id}/issues?filter={filter_as_query}")

@@ -29,6 +29,7 @@ def main():
     filter = {
         'only-security': environ.get('POLARIS_FILTER_ONLY_SECURITY'),
         'only-untriaged': environ.get('POLARIS_FILTER_ONLY_UNTRIAGED'),
+        'only-med-high': environ.get('POLARIS_FILTER_ONLY_MED_HIGH'),
     }
     filter_untriaged = filter.copy()
     filter_untriaged['only-untriaged'] = True

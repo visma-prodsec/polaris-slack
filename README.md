@@ -16,6 +16,7 @@ You can configure which issues (eg only security or untriaged) are being reporte
 |SLACK_WEBHOOK_URL|Uri|`https://hooks.slack.com/services/XXXX/YYYY/zzzzz`|
 |POLARIS_FILTER_ONLY_SECURITY|Boolean|true (optional)|
 |POLARIS_FILTER_ONLY_UNTRIAGED|Boolean|true (optional)|
+|POLARIS_FILTER_ONLY_MED_HIGH|Boolean|true (optional)|
 
 ## Usage with docker
 
