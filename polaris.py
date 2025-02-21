@@ -145,7 +145,7 @@ class Polaris:
             filters += ["issue[triage-status][$eq]=not-triaged"]
 
         if filter['only-med-high']:
-            filters += ["filter[issue][taxonomy][taxonomy-type][severity][taxon][%24one-of]=[high,medium]"]
+            filters += ["issue[taxonomy][taxonomy-type][severity][taxon][%24one-of]=[high,medium]"]
 
         filter_as_query = urllib.parse.quote('&'.join(filters))
         return self.getFullUrl(f"/projects/{project_id}/branches/{branch_id}/issues?filter={filter_as_query}")
