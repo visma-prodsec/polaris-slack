@@ -34,10 +34,16 @@ def main():
     filter_untriaged = filter.copy()
     filter_untriaged['only-untriaged'] = True
 
+    try:
+        projects_per_message = int(environ.get('SLACK_PROJECTS_PER_MESSAGE'))
+    except ValueError:
+        projects_per_message = 50
+        pass
+
     projects_with_issues = polaris.GetProjectsAndIssues(filter)
 
     if slack_webhook_url:
-        slack = Slack(slack_webhook_url)
+        slack = Slack(slack_webhook_url, projects_per_message)
         slack.SendSummaryPerProjects(projects_with_issues, filter)
     elif google_spaces_url:
         projects_with_untriaged_issues = polaris.GetProjectsAndIssues(filter_untriaged)
