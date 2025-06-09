@@ -99,7 +99,17 @@ class Polaris:
         request_url = self.getFullUrl('/api/query/v1/issues' + '?' + '&'.join(query_args))
         for attempt in range(self._retries):
             async with session.get(request_url, headers=self._getHeaders()) as response:
+                content_type = response.headers.get('Content-Type', '')
                 try:
+                    if 'application/vnd.api+json' not in content_type:
+                        if attempt < self._retries - 1:
+                            print(f"Warning: Unexpected Content-Type '{content_type}' from Polaris. Retrying in {self._wait_seconds} seconds...", flush=True)
+                            await asyncio.sleep(self._wait_seconds)
+                            continue
+                        else:
+                            raise RuntimeError(
+                                f"Failed: Unexpected Content-Type '{content_type}' from Polaris after {self._retries} attempts (HTTP {response.status})"
+                            )
                     return await response.json()
                 except Exception:
                     if attempt < self._retries - 1:
@@ -279,11 +289,21 @@ class Polaris:
     def _request_with_retries(self, method, url, **kwargs):
         for attempt in range(self._retries):
             response = self._client.request(method, url, **kwargs)
+            content_type = response.headers.get('Content-Type', '')
             try:
+                if 'application/vnd.api+json' not in content_type:
+                    if attempt < self._retries - 1:
+                        print(f"Warning: Unexpected Content-Type '{content_type}' from Polaris. Retrying in {self._wait_seconds} seconds...", flush=True)
+                        time.sleep(self._wait_seconds)
+                        continue
+                    else:
+                        raise RuntimeError(
+                            f"Failed: Unexpected Content-Type '{content_type}' from Polaris after {self._retries} attempts (HTTP {response.status_code})"
+                        )
                 return response.json()
             except Exception:
                 if attempt < self._retries - 1:
-                    print(f"Warning: Unexpected response from Polaris (HTTP {response.status_code}). Retrying in {wait_seconds} seconds...", flush=True)
+                    print(f"Warning: Unexpected response from Polaris (HTTP {response.status_code}). Retrying in {self._wait_seconds} seconds...", flush=True)
                     time.sleep(self._wait_seconds)
                 else:
                     raise RuntimeError(
