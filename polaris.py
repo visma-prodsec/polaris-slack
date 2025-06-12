@@ -101,7 +101,7 @@ class Polaris:
             async with session.get(request_url, headers=self._getHeaders()) as response:
                 content_type = response.headers.get('Content-Type', '')
                 try:
-                    if 'application/vnd.api+json' not in content_type:
+                    if ('application/vnd.api+json' not in content_type and 'application/json' not in content_type):
                         if attempt < self._retries - 1:
                             print(f"Warning: Unexpected Content-Type '{content_type}' from Polaris. Retrying in {self._wait_seconds} seconds...", flush=True)
                             await asyncio.sleep(self._wait_seconds)
@@ -291,7 +291,7 @@ class Polaris:
             response = self._client.request(method, url, **kwargs)
             content_type = response.headers.get('Content-Type', '')
             try:
-                if 'application/vnd.api+json' not in content_type:
+                if ('application/vnd.api+json' not in content_type and 'application/json' not in content_type):
                     if attempt < self._retries - 1:
                         print(f"Warning: Unexpected Content-Type '{content_type}' from Polaris. Retrying in {self._wait_seconds} seconds...", flush=True)
                         time.sleep(self._wait_seconds)
