@@ -115,15 +115,14 @@ class Polaris:
     async def _getProjectIssues(self, session, project_id, branch_id, filter):
         data = []
         included = []
-        pages = self._getPaginatedIssues(session, project_id, branch_id, filter)
         try:
-            async for page in pages:
+            async for page in self._getPaginatedIssues(session, project_id, branch_id, filter):
                 page_data = page['data']
                 page_included = page['included']
                 data.extend(page_data)
                 included.extend(page_included)
-        finally:
-            pages.aclose()
+        except Exception as e:
+            print(f"Exception occurred while fetching pages: {e}")
 
         return {
             'data': data,
