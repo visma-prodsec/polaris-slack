@@ -9,10 +9,12 @@ class Slack:
         "Medium": ":large_orange_square:",
         "High": ":large_red_square:"
     }
+    def __clearMessages(self):
+        self.slack_message = []
 
     def __init__(self, webhook_url):
         self.webhook = WebhookClient(webhook_url)
-        self.slack_message = []
+        self.__clearMessages()
 
     def appendOrSend(self, block):
         if len(self.slack_message) >= 50:
@@ -20,7 +22,7 @@ class Slack:
                 text="fallback",
                 blocks=self.slack_message
             )
-            self.slack_message = []
+            self.__clearMessages()
         self.slack_message.append(block)
 
     def flush(self):
@@ -28,7 +30,7 @@ class Slack:
             text="fallback",
             blocks=self.slack_message
         )
-        self.slack_message = []
+        self.__clearMessages()
 
     def GetIssueCount(self, issues):
         issue_counts = {}
