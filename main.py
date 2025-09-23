@@ -1,11 +1,17 @@
 import json
 import logging
 import sys
+import datetime
 from os import environ
 
 from polaris import Polaris
 from slack import Slack
 from google import Google
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(name)s %(message)s'
+   )
 
 logger = logging.getLogger('polaris-slack')
 
@@ -27,7 +33,7 @@ def main():
         google_spaces_url = environ.get('GOOGLE_SPACES_URL')
         if (not slack_webhook_url) and (not google_spaces_url):
             logger.warning("Environment SLACK_WEBHOOK and GOOGLE_SPACES_URL is unset, just outputting issues to console.")
-
+        logger.info(f"Polaris starting at {datetime.datetime.now().isoformat()}")
         polaris = Polaris(polaris_url, token, retries=retries, wait_seconds=wait_seconds)
 
         filter = {
@@ -37,11 +43,16 @@ def main():
         filter_untriaged = filter.copy()
         filter_untriaged['only-untriaged'] = True
 
+        logger.info(f"Polaris GetProjectsAndIssues {filter} at {datetime.datetime.now().isoformat()}")
         projects_with_issues = polaris.GetProjectsAndIssues(filter)
 
         if slack_webhook_url:
+            logger.info(f"Polaris GetProjectsAndIssues {filter_untriaged} at {datetime.datetime.now().isoformat()}")
+            projects_with_untriaged_issues = polaris.GetProjectsAndIssues(filter_untriaged)
             slack = Slack(slack_webhook_url)
+            logger.info(f"Slack SendSummaryPerProjects at {datetime.datetime.now().isoformat()}")
             slack.SendSummaryPerProjects(projects_with_issues, filter)
+            slack.SendSummaryPerProjects(projects_with_untriaged_issues, filter_untriaged)
         elif google_spaces_url:
             projects_with_untriaged_issues = polaris.GetProjectsAndIssues(filter_untriaged)
             google = Google(google_spaces_url)
@@ -50,7 +61,9 @@ def main():
             print(json.dumps(projects_with_issues, indent=2))
     except Exception as e:
         print(f"Fatal error: {e}", flush=True)
+        logger.critical(f"Fatal error: {e}", exc_info=True)
         sys.exit(1)
+    logger.info(f"Finished at {datetime.datetime.now().isoformat()}")
 
 if __name__ == '__main__':
     main()
