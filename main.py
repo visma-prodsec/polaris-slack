@@ -19,6 +19,7 @@ def main():
     try:
         polaris_url = environ.get('POLARIS_URL')
         token = environ.get('POLARIS_TOKEN')
+        send_both_issues_and_untriaged_at_once_to_slack = environ.get('SEND_BOTH_ISSUES_AND_UNTRIAGED_AT_ONCE_TO_SLACK')
         retries = int(environ.get('POLARIS_RETRIES', 1))  # Default to 1 if not set
         wait_seconds = int(environ.get('POLARIS_WAIT_SECONDS', 60))  # Default to 60 if not set
 
@@ -47,12 +48,12 @@ def main():
         projects_with_issues = polaris.GetProjectsAndIssues(filter)
 
         if slack_webhook_url:
-            logger.info(f"Polaris GetProjectsAndIssues {filter_untriaged} at {datetime.datetime.now().isoformat()}")
-            projects_with_untriaged_issues = polaris.GetProjectsAndIssues(filter_untriaged)
             slack = Slack(slack_webhook_url)
-            logger.info(f"Slack SendSummaryPerProjects at {datetime.datetime.now().isoformat()}")
             slack.SendSummaryPerProjects(projects_with_issues, filter)
-            slack.SendSummaryPerProjects(projects_with_untriaged_issues, filter_untriaged)
+            if str(send_both_issues_and_untriaged_at_once_to_slack).lower() == "true":
+                logger.info(f"Polaris GetProjectsAndIssues {filter_untriaged} at {datetime.datetime.now().isoformat()}")
+                projects_with_untriaged_issues = polaris.GetProjectsAndIssues(filter_untriaged)
+                slack.SendSummaryPerProjects(projects_with_untriaged_issues, filter_untriaged)
         elif google_spaces_url:
             projects_with_untriaged_issues = polaris.GetProjectsAndIssues(filter_untriaged)
             google = Google(google_spaces_url)
