@@ -3,6 +3,7 @@ import urllib
 import math
 import aiohttp
 import asyncio
+import time
 
 import json
 
@@ -15,9 +16,11 @@ ISSUE_SEVERITY_RANKS = {
 }
 
 class Polaris:
-    def __init__(self, url, token):
+    def __init__(self, url, token, retries, wait_seconds):
         self._baseurl = url
         self._client = requests.Session()
+        self._retries = retries
+        self._wait_seconds = wait_seconds
         self._jwt = self.getJwt(token)
 
     def __del__(self):
@@ -35,45 +38,45 @@ class Polaris:
         auth_headers = {'Content-Type': 'application/x-www-form-urlencoded'}
         auth_params = {'accesstoken': token}
 
-        try:
-            response = self._client.post(self.getFullUrl('/api/auth/authenticate'), headers=auth_headers, data=auth_params)
-
-            if response.status_code == 200:
-                json_payload = response.json()
-
-                return json_payload['jwt']
-        except:
-            print('Failed to authenticate')
-            raise
+        for attempt in range(self._retries):
+            try:
+                response = self._client.post(
+                    self.getFullUrl('/api/auth/authenticate'),
+                    headers=auth_headers,
+                    data=auth_params
+                )
+                if response.status_code == 200:
+                    json_payload = response.json()
+                    return json_payload['jwt']
+                else:
+                    raise Exception(f"HTTP {response.status_code}")
+            except Exception as e:
+                if attempt < self._retries - 1:
+                    print(f"Warning: Failed to authenticate with Polaris ({e}). Retrying in {self._wait_seconds} seconds...", flush=True)
+                    time.sleep(self._wait_seconds)
+                else:
+                    print(f"Failed to authenticate after {self._retries} attempts. Last error: {e}", flush=True)
+                    raise RuntimeError(
+                        f"Failed: Unexpected response from Polaris after {self._retries} attempts (HTTP {getattr(response, 'status_code', 'N/A')})"
+                    )
         return None
 
     def GetApplication(self, application_id):
-        response = self._client.get(self.getFullUrl(f'/api/common/v0/applications/{application_id}'),
-                                headers=self._getHeaders())
-
-        return response.json()
+        url = self.getFullUrl(f'/api/common/v0/applications/{application_id}')
+        return self._request_with_retries("GET", url, headers=self._getHeaders())
 
     def GetProjectsFromApplication(self, application_id):
-        response = self._client.get(
-            self.getFullUrl('/api/common/v0/projects') + f'?page[limit]=500&application-id={application_id}&include[project][]=branches&include[project][]=runs',
-            headers=self._getHeaders())
-
-        return response.json()
+        url = self.getFullUrl('/api/common/v0/projects') + f'?page[limit]=500&application-id={application_id}&include[project][]=branches&include[project][]=runs'
+        return self._request_with_retries("GET", url, headers=self._getHeaders())
 
     def GetProjectsByCustomProperty(self, **kwargs):
         custom_properties = "&".join("filter[project][properties][{}][$eq]={}".format(*i) for i in kwargs.items())
-        response = self._client.get(
-            self.getFullUrl('/api/common/v0/projects') + f'?page[limit]=500&{custom_properties}&include[project][]=branches&include[project][]=runs',
-            headers=self._getHeaders())
-
-        return response.json()
+        url = self.getFullUrl('/api/common/v0/projects') + f'?page[limit]=500&{custom_properties}&include[project][]=branches&include[project][]=runs'
+        return self._request_with_retries("GET", url, headers=self._getHeaders())
 
     def _getProjects(self):
-        response = self._client.get(self.getFullUrl(
-            '/api/common/v0/projects') + '?page[limit]=500&include[project][]=branches&include[project][]=runs',
-                                headers=self._getHeaders())
-
-        return response.json()
+        url = self.getFullUrl('/api/common/v0/projects') + '?page[limit]=500&include[project][]=branches&include[project][]=runs'
+        return self._request_with_retries("GET", url, headers=self._getHeaders())
 
     async def _getPaginatedIssuePage(self, session, project_id, branch_id, limit, offset, filter):
         query_args = [
@@ -97,8 +100,28 @@ class Polaris:
             query_args += ["filter[issue][taxonomy][taxonomy-type][severity][taxon][%24one-of]=[high,medium]"]
 
         request_url = self.getFullUrl('/api/query/v1/issues' + '?' + '&'.join(query_args))
-        async with session.get(request_url, headers=self._getHeaders()) as response:
-            return await response.json()
+        for attempt in range(self._retries):
+            async with session.get(request_url, headers=self._getHeaders()) as response:
+                content_type = response.headers.get('Content-Type', '')
+                try:
+                    if ('application/vnd.api+json' not in content_type and 'application/json' not in content_type):
+                        if attempt < self._retries - 1:
+                            print(f"Warning: Unexpected Content-Type '{content_type}' from Polaris. Retrying in {self._wait_seconds} seconds...", flush=True)
+                            await asyncio.sleep(self._wait_seconds)
+                            continue
+                        else:
+                            raise RuntimeError(
+                                f"Failed: Unexpected Content-Type '{content_type}' from Polaris after {self._retries} attempts (HTTP {response.status})"
+                            )
+                    return await response.json()
+                except Exception:
+                    if attempt < self._retries - 1:
+                        print(f"Warning: Unexpected response from Polaris (HTTP {response.status}). Retrying in {self._wait_seconds} seconds...", flush=True)
+                        await asyncio.sleep(self._wait_seconds)
+                    else:
+                        raise RuntimeError(
+                            f"Failed: Unexpected response from Polaris after {self._retries} attempts (HTTP {response.status})"
+                        )
 
     async def _getPaginatedIssues(self, session, project_id, branch_id, filter):
         first_page = await self._getPaginatedIssuePage(session, project_id, branch_id, 500, 0, filter)
@@ -154,7 +177,7 @@ class Polaris:
 
         data = issues['data']
         if len(data) > 0:
-            print(project_name)
+            print(project_name, flush=True)
             untriaged_filter = filter.copy()
             untriaged_filter['only-untriaged'] = True
             return {
@@ -267,3 +290,27 @@ class Polaris:
 
         # Sort by severity rank, issue-type and path
         return sorted(issues, key=lambda x: (int(ISSUE_SEVERITY_RANKS[x['severity']]), x['issue-type'], x['path']))
+
+    def _request_with_retries(self, method, url, **kwargs):
+        for attempt in range(self._retries):
+            response = self._client.request(method, url, **kwargs)
+            content_type = response.headers.get('Content-Type', '')
+            try:
+                if ('application/vnd.api+json' not in content_type and 'application/json' not in content_type):
+                    if attempt < self._retries - 1:
+                        print(f"Warning: Unexpected Content-Type '{content_type}' from Polaris. Retrying in {self._wait_seconds} seconds...", flush=True)
+                        time.sleep(self._wait_seconds)
+                        continue
+                    else:
+                        raise RuntimeError(
+                            f"Failed: Unexpected Content-Type '{content_type}' from Polaris after {self._retries} attempts (HTTP {response.status_code})"
+                        )
+                return response.json()
+            except Exception:
+                if attempt < self._retries - 1:
+                    print(f"Warning: Unexpected response from Polaris (HTTP {response.status_code}). Retrying in {self._wait_seconds} seconds...", flush=True)
+                    time.sleep(self._wait_seconds)
+                else:
+                    raise RuntimeError(
+                        f"Failed: Unexpected response from Polaris after {self._retries} attempts (HTTP {response.status_code})"
+                    )

@@ -7,6 +7,12 @@ But you are in charge of running this script after your normal Polaris snapshot 
 
 You can configure which issues (eg only security or untriaged) are being reported.
 
+## Requirements
+
+Python version => 3.4
+
+Versions of Python earlier than 3.4 needs asyncio, so you are going to need the backport package of that.
+
 ## Required Environment Variables
 
 |VariableName|Type|Example|
