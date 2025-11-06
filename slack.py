@@ -3,6 +3,7 @@ from slack_sdk.models.blocks import SectionBlock, MarkdownTextObject, HeaderBloc
 
 
 class Slack:
+    projects_per_message = 50
     severity_colors = {
         "Audit": ":large_white_square:",
         "Low": ":large_yellow_square:",
@@ -12,12 +13,14 @@ class Slack:
     def __clearMessages(self):
         self.slack_message = []
 
-    def __init__(self, webhook_url):
+    def __init__(self, webhook_url, one_message_per_project):
         self.webhook = WebhookClient(webhook_url)
+        if one_message_per_project:
+            self.projects_per_message = 1
         self.__clearMessages()
 
     def appendOrSend(self, block):
-        if len(self.slack_message) >= 50:
+        if len(self.slack_message) >= self.projects_per_message:
             response = self.webhook.send(
                 text="fallback",
                 blocks=self.slack_message

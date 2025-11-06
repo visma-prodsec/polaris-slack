@@ -40,15 +40,18 @@ def main():
         filter = {
             'only-security': environ.get('POLARIS_FILTER_ONLY_SECURITY'),
             'only-untriaged': environ.get('POLARIS_FILTER_ONLY_UNTRIAGED'),
+            'only-med-high': environ.get('POLARIS_FILTER_ONLY_MED_HIGH'),
         }
         filter_untriaged = filter.copy()
         filter_untriaged['only-untriaged'] = True
+
+        one_message_per_project = bool(environ.get('SLACK_ONE_MESSAGE_PER_PROJECT'))
 
         logger.info(f"Polaris GetProjectsAndIssues {filter} at {datetime.datetime.now().isoformat()}")
         projects_with_issues = polaris.GetProjectsAndIssues(filter)
 
         if slack_webhook_url:
-            slack = Slack(slack_webhook_url)
+            slack = Slack(slack_webhook_url, one_message_per_project)
             slack.SendSummaryPerProjects(projects_with_issues, filter)
             if str(send_both_issues_and_untriaged_at_once_to_slack).lower() == "true":
                 logger.info(f"Polaris GetProjectsAndIssues {filter_untriaged} at {datetime.datetime.now().isoformat()}")

@@ -20,8 +20,17 @@ Versions of Python earlier than 3.4 needs asyncio, so you are going to need the 
 |POLARIS_URL|Uri|`http://example.polaris.synopsys.com/`|
 |POLARIS_TOKEN|string|`examplepolaritoken`|
 |SLACK_WEBHOOK_URL|Uri|`https://hooks.slack.com/services/XXXX/YYYY/zzzzz`|
+|SLACK_ONE_MESSAGE_PER_PROJECT|Boolean|true (optional)|
 |POLARIS_FILTER_ONLY_SECURITY|Boolean|true (optional)|
 |POLARIS_FILTER_ONLY_UNTRIAGED|Boolean|true (optional)|
+|POLARIS_FILTER_ONLY_MED_HIGH|Boolean|true (optional)|
+
+## Optional Environment Variables explained
+
+- SLACK_ONE_MESSAGE_PER_PROJECT
+    - boolean to send one message per project so you can easily start thread per project in slack.
+- POLARIS_FILTER_ONLY_MED_HIGH
+    -  boolean to filter only medium and high issues.
 
 ## Usage with docker
 
