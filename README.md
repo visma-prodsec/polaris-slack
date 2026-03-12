@@ -17,7 +17,7 @@ Versions of Python earlier than 3.4 needs asyncio, so you are going to need the 
 
 |VariableName|Type|Example|
 |---|---|---|
-|POLARIS_URL|Uri|`http://example.polaris.synopsys.com/`|
+|POLARIS_URL|Uri|`http://example.cop.blackduck.com/`|
 |POLARIS_TOKEN|string|`examplepolaritoken`|
 |SLACK_WEBHOOK_URL|Uri|`https://hooks.slack.com/services/XXXX/YYYY/zzzzz`|
 |SLACK_ONE_MESSAGE_PER_PROJECT|Boolean|true (optional)|

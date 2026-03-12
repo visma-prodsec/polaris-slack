@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 RUN apt update && apt install -y ca-certificates && apt clean && rm -rf /var/lib/{apt,dpkg,cache,log}/
 
