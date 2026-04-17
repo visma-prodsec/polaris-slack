@@ -96,6 +96,9 @@ class Polaris:
         if filter.get('only-untriaged', False):
             query_args += ["filter[issue][triage-status][$eq]=not-triaged"]
 
+        if filter['only-med-high']:
+            query_args += ["filter[issue][taxonomy][taxonomy-type][severity][taxon][%24one-of]=[high,medium]"]
+
         request_url = self.getFullUrl('/api/query/v1/issues' + '?' + '&'.join(query_args))
         for attempt in range(self._retries):
             async with session.get(request_url, headers=self._getHeaders()) as response:
@@ -135,15 +138,14 @@ class Polaris:
     async def _getProjectIssues(self, session, project_id, branch_id, filter):
         data = []
         included = []
-        pages = self._getPaginatedIssues(session, project_id, branch_id, filter)
         try:
-            async for page in pages:
+            async for page in self._getPaginatedIssues(session, project_id, branch_id, filter):
                 page_data = page['data']
                 page_included = page['included']
                 data.extend(page_data)
                 included.extend(page_included)
-        finally:
-            pages.aclose()
+        except Exception as e:
+            print(f"Exception occurred while fetching pages: {e}")
 
         return {
             'data': data,
@@ -163,6 +165,9 @@ class Polaris:
 
         if filter['only-untriaged']:
             filters += ["issue[triage-status][$eq]=not-triaged"]
+
+        if filter['only-med-high']:
+            filters += ["issue[taxonomy][taxonomy-type][severity][taxon][%24one-of]=[high,medium]"]
 
         filter_as_query = urllib.parse.quote('&'.join(filters))
         return self.getFullUrl(f"/projects/{project_id}/branches/{branch_id}/issues?filter={filter_as_query}")
