@@ -1,5 +1,7 @@
 from slack_sdk.webhook import WebhookClient
-from slack_sdk.models.blocks import SectionBlock, MarkdownTextObject, HeaderBlock, DividerBlock, TextObject
+from slack_sdk.models.blocks import (
+    SectionBlock, MarkdownTextObject, HeaderBlock, DividerBlock, TextObject
+)
 
 
 class Slack:
@@ -9,6 +11,7 @@ class Slack:
         "Medium": ":large_orange_square:",
         "High": ":large_red_square:"
     }
+
     def __clearMessages(self):
         self.slack_message = []
 
@@ -18,7 +21,7 @@ class Slack:
 
     def appendOrSend(self, block):
         if len(self.slack_message) >= 50:
-            response = self.webhook.send(
+            self.webhook.send(
                 text="fallback",
                 blocks=self.slack_message
             )
@@ -26,7 +29,7 @@ class Slack:
         self.slack_message.append(block)
 
     def flush(self):
-        response = self.webhook.send(
+        self.webhook.send(
             text="fallback",
             blocks=self.slack_message
         )
@@ -60,7 +63,13 @@ class Slack:
         issue_description = ' '.join(issue_descriptions)
 
         self.appendOrSend(SectionBlock(
-            text=MarkdownTextObject(text=f"{total_issues} {issue_description} issues in {len(normalized_projects)} polaris projects")))
+            text=MarkdownTextObject(
+                text=(
+                    f"{total_issues} {issue_description} issues in"
+                    f" {len(normalized_projects)} polaris projects"
+                )
+            )
+        ))
 
         for project in normalized_projects:
             issues = project['issues']
@@ -68,9 +77,20 @@ class Slack:
 
             fields = []
             for issue_severity, issue_count in issue_counts.items():
-                fields.append(MarkdownTextObject(text=f"{self.severity_colors[issue_severity]}{issue_severity}: {issue_count}"))
+                fields.append(MarkdownTextObject(
+                    text=(
+                        f"{self.severity_colors[issue_severity]}"
+                        f"{issue_severity}: {issue_count}"
+                    )
+                ))
 
-            block = SectionBlock(text=MarkdownTextObject(text=f"*<{project['direct-link']}|{project['project_name']}>*",verbatim=False), fields=fields)
+            link_text = (
+                f"*<{project['direct-link']}|{project['project_name']}>*"
+            )
+            block = SectionBlock(
+                text=MarkdownTextObject(text=link_text, verbatim=False),
+                fields=fields,
+            )
 
             self.appendOrSend(block)
 
@@ -82,12 +102,25 @@ class Slack:
         for project in normalized_projects:
             total_issues += len(project['issues'])
 
-        self.appendOrSend(SectionBlock(text=MarkdownTextObject(text=f"{total_issues} issues in {len(normalized_projects)} polaris projects")))
+        self.appendOrSend(SectionBlock(
+            text=MarkdownTextObject(
+                text=(
+                    f"{total_issues} issues in"
+                    f" {len(normalized_projects)} polaris projects"
+                )
+            )
+        ))
 
         for project in normalized_projects:
             issues = project['issues']
-            self.appendOrSend(HeaderBlock(text=TextObject(subtype='plain_text',text=project['project_name'])))
-            self.appendOrSend(SectionBlock(text=MarkdownTextObject(text=f"{len(issues)} issues")))
+            self.appendOrSend(HeaderBlock(
+                text=TextObject(
+                    subtype='plain_text', text=project['project_name']
+                )
+            ))
+            self.appendOrSend(SectionBlock(
+                text=MarkdownTextObject(text=f"{len(issues)} issues")
+            ))
             last_severity = None
             last_issue_type = None
             for issue in issues:
@@ -95,13 +128,25 @@ class Slack:
 
                 issue_type = issue['sub-tool']
                 if last_severity != severity:
-                    self.appendOrSend(SectionBlock(text=TextObject(subtype='plain_text', text=f'Severity: {severity}')))
+                    self.appendOrSend(SectionBlock(
+                        text=TextObject(
+                            subtype='plain_text',
+                            text=f'Severity: {severity}',
+                        )
+                    ))
                     self.appendOrSend(DividerBlock())
                     last_severity = severity
                 if last_issue_type != issue_type:
-                    self.appendOrSend(SectionBlock(text=MarkdownTextObject(text=f'_{issue_type}_')))
+                    self.appendOrSend(SectionBlock(
+                        text=MarkdownTextObject(text=f'_{issue_type}_')
+                    ))
                     self.appendOrSend(DividerBlock())
                     last_issue_type = issue_type
-                self.appendOrSend(SectionBlock(text=MarkdownTextObject(text=f"<{issue['direct-link']}|{issue['path']}>", verbatim=False)))
+                self.appendOrSend(SectionBlock(
+                    text=MarkdownTextObject(
+                        text=f"<{issue['direct-link']}|{issue['path']}>",
+                        verbatim=False,
+                    )
+                ))
 
         self.flush()

@@ -1,5 +1,5 @@
 # polaris-slack
-Slack integration for Synopsys Coverity on Polaris
+Slack integration for Blackduck Coverity on Polaris
 
 The functionality of this script is to alert on new issues in any Polaris project that a service account has access to.
 
@@ -9,9 +9,9 @@ You can configure which issues (eg only security or untriaged) are being reporte
 
 ## Requirements
 
-Python version => 3.4
+Python version >= 3.5 and <= 3.14
 
-Versions of Python earlier than 3.4 needs asyncio, so you are going to need the backport package of that.
+Python versions earlier than 3.5 need asyncio, so you will need the backport package of that.
 
 ## Required Environment Variables
 

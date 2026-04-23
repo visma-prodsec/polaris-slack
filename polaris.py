@@ -4,8 +4,7 @@ import math
 import aiohttp
 import asyncio
 import time
-
-import json
+import sys
 
 ISSUE_SEVERITY_RANKS = {
     "Critical": 0,
@@ -14,6 +13,7 @@ ISSUE_SEVERITY_RANKS = {
     "Low": 3,
     "Audit": 4
 }
+
 
 class Polaris:
     def __init__(self, url, token, retries, wait_seconds):
@@ -27,8 +27,11 @@ class Polaris:
         self._client.close()
 
     def _getHeaders(self):
-        headers = {'Content-Type': 'application/vnd.api+json', 'Accept': 'application/vnd.api+json',
-                   'Authorization': f'Bearer {self._jwt}'}
+        headers = {
+            'Content-Type': 'application/vnd.api+json',
+            'Accept': 'application/vnd.api+json',
+            'Authorization': f'Bearer {self._jwt}',
+        }
         return headers
 
     def getFullUrl(self, path):
@@ -52,33 +55,70 @@ class Polaris:
                     raise Exception(f"HTTP {response.status_code}")
             except Exception as e:
                 if attempt < self._retries - 1:
-                    print(f"Warning: Failed to authenticate with Polaris ({e}). Retrying in {self._wait_seconds} seconds...", flush=True)
+                    print(
+                        f"Warning: Failed to authenticate with Polaris"
+                        f" ({e}). Retrying in {self._wait_seconds}"
+                        " seconds...",
+                        flush=True
+                    )
                     time.sleep(self._wait_seconds)
                 else:
-                    print(f"Failed to authenticate after {self._retries} attempts. Last error: {e}", flush=True)
+                    print(
+                        f"Failed to authenticate after {self._retries}"
+                        f" attempts. Last error: {e}",
+                        flush=True
+                    )
                     raise RuntimeError(
-                        f"Failed: Unexpected response from Polaris after {self._retries} attempts (HTTP {getattr(response, 'status_code', 'N/A')})"
+                        f"Failed: Unexpected response from Polaris after"
+                        f" {self._retries} attempts"
+                        f" (HTTP {getattr(response, 'status_code', 'N/A')})"
                     )
         return None
 
     def GetApplication(self, application_id):
-        url = self.getFullUrl(f'/api/common/v0/applications/{application_id}')
-        return self._request_with_retries("GET", url, headers=self._getHeaders())
+        url = self.getFullUrl(
+            f'/api/common/v0/applications/{application_id}'
+        )
+        return self._request_with_retries(
+            "GET", url, headers=self._getHeaders()
+        )
 
     def GetProjectsFromApplication(self, application_id):
-        url = self.getFullUrl('/api/common/v0/projects') + f'?page[limit]=500&application-id={application_id}&include[project][]=branches&include[project][]=runs'
-        return self._request_with_retries("GET", url, headers=self._getHeaders())
+        url = (
+            self.getFullUrl('/api/common/v0/projects')
+            + f'?page[limit]=500&application-id={application_id}'
+            '&include[project][]=branches&include[project][]=runs'
+        )
+        return self._request_with_retries(
+            "GET", url, headers=self._getHeaders()
+        )
 
     def GetProjectsByCustomProperty(self, **kwargs):
-        custom_properties = "&".join("filter[project][properties][{}][$eq]={}".format(*i) for i in kwargs.items())
-        url = self.getFullUrl('/api/common/v0/projects') + f'?page[limit]=500&{custom_properties}&include[project][]=branches&include[project][]=runs'
-        return self._request_with_retries("GET", url, headers=self._getHeaders())
+        custom_properties = "&".join(
+            "filter[project][properties][{}][$eq]={}".format(*i)
+            for i in kwargs.items()
+        )
+        url = (
+            self.getFullUrl('/api/common/v0/projects')
+            + f'?page[limit]=500&{custom_properties}'
+            '&include[project][]=branches&include[project][]=runs'
+        )
+        return self._request_with_retries(
+            "GET", url, headers=self._getHeaders()
+        )
 
     def _getProjects(self):
-        url = self.getFullUrl('/api/common/v0/projects') + '?page[limit]=500&include[project][]=branches&include[project][]=runs'
-        return self._request_with_retries("GET", url, headers=self._getHeaders())
+        url = (
+            self.getFullUrl('/api/common/v0/projects')
+            + '?page[limit]=500'
+            '&include[project][]=branches&include[project][]=runs'
+        )
+        return self._request_with_retries(
+            "GET", url, headers=self._getHeaders()
+        )
 
-    async def _getPaginatedIssuePage(self, session, project_id, branch_id, limit, offset, filter):
+    async def _getPaginatedIssuePage(
+            self, session, project_id, branch_id, limit, offset, filter):
         query_args = [
             f"page[limit]={limit}",
             f"page[offset]={offset}",
@@ -91,37 +131,64 @@ class Polaris:
         ]
 
         if filter.get('only-security', False):
-            query_args += ["filter[issue][taxonomy][taxonomy-type][issue-kind][taxon][$eq]=security"]
+            query_args += [
+                "filter[issue][taxonomy][taxonomy-type]"
+                "[issue-kind][taxon][$eq]=security"
+            ]
 
         if filter.get('only-untriaged', False):
             query_args += ["filter[issue][triage-status][$eq]=not-triaged"]
 
-        request_url = self.getFullUrl('/api/query/v1/issues' + '?' + '&'.join(query_args))
+        request_url = self.getFullUrl(
+            '/api/query/v1/issues' + '?' + '&'.join(query_args)
+        )
         for attempt in range(self._retries):
-            async with session.get(request_url, headers=self._getHeaders()) as response:
+            async with session.get(
+                request_url, headers=self._getHeaders()
+            ) as response:
                 content_type = response.headers.get('Content-Type', '')
                 try:
-                    if ('application/vnd.api+json' not in content_type and 'application/json' not in content_type):
+                    if ('application/vnd.api+json' not in content_type
+                            and 'application/json' not in content_type):
                         if attempt < self._retries - 1:
-                            print(f"Warning: Unexpected Content-Type '{content_type}' from Polaris. Retrying in {self._wait_seconds} seconds...", flush=True)
+                            print(
+                                f"Warning: Unexpected Content-Type"
+                                f" '{content_type}' from Polaris."
+                                f" Retrying in {self._wait_seconds}"
+                                " seconds...",
+                                flush=True
+                            )
                             await asyncio.sleep(self._wait_seconds)
                             continue
                         else:
                             raise RuntimeError(
-                                f"Failed: Unexpected Content-Type '{content_type}' from Polaris after {self._retries} attempts (HTTP {response.status})"
+                                f"Failed: Unexpected Content-Type"
+                                f" '{content_type}' from Polaris after"
+                                f" {self._retries} attempts"
+                                f" (HTTP {response.status})"
                             )
                     return await response.json()
                 except Exception:
                     if attempt < self._retries - 1:
-                        print(f"Warning: Unexpected response from Polaris (HTTP {response.status}). Retrying in {self._wait_seconds} seconds...", flush=True)
+                        print(
+                            f"Warning: Unexpected response from Polaris"
+                            f" (HTTP {response.status})."
+                            f" Retrying in {self._wait_seconds} seconds...",
+                            flush=True
+                        )
                         await asyncio.sleep(self._wait_seconds)
                     else:
                         raise RuntimeError(
-                            f"Failed: Unexpected response from Polaris after {self._retries} attempts (HTTP {response.status})"
+                            f"Failed: Unexpected response from Polaris"
+                            f" after {self._retries} attempts"
+                            f" (HTTP {response.status})"
                         )
 
-    async def _getPaginatedIssues(self, session, project_id, branch_id, filter):
-        first_page = await self._getPaginatedIssuePage(session, project_id, branch_id, 500, 0, filter)
+    async def _getPaginatedIssues(
+            self, session, project_id, branch_id, filter):
+        first_page = await self._getPaginatedIssuePage(
+            session, project_id, branch_id, 500, 0, filter
+        )
         yield first_page
 
         total = first_page['meta']['total']
@@ -129,13 +196,16 @@ class Polaris:
 
         if total > len(first_page['data']):
             for page in range(1, math.ceil(total/limit)):
-                yield self._getPaginatedIssuePage(session, project_id, branch_id, limit, page*limit, filter)
-
+                yield self._getPaginatedIssuePage(
+                    session, project_id, branch_id, limit, page*limit, filter
+                )
 
     async def _getProjectIssues(self, session, project_id, branch_id, filter):
         data = []
         included = []
-        pages = self._getPaginatedIssues(session, project_id, branch_id, filter)
+        pages = self._getPaginatedIssues(
+            session, project_id, branch_id, filter
+        )
         try:
             async for page in pages:
                 page_data = page['data']
@@ -151,7 +221,10 @@ class Polaris:
         }
 
     def FormatIssueUrl(self, project_id, branch_id, revision_id, issue_id):
-        return self.getFullUrl(f'/projects/{project_id}/branches/{branch_id}/revisions/{revision_id}/issues/{issue_id}')
+        return self.getFullUrl(
+            f'/projects/{project_id}/branches/{branch_id}'
+            f'/revisions/{revision_id}/issues/{issue_id}'
+        )
 
     def FormatProjectUrl(self, project_id, branch_id, filter):
         filters = [
@@ -159,16 +232,25 @@ class Polaris:
         ]
 
         if filter['only-security']:
-            filters += ["issue[taxonomy][taxonomy-type][issue-kind][taxon][$eq]=security"]
+            filters += [
+                "issue[taxonomy][taxonomy-type]"
+                "[issue-kind][taxon][$eq]=security"
+            ]
 
         if filter['only-untriaged']:
             filters += ["issue[triage-status][$eq]=not-triaged"]
 
         filter_as_query = urllib.parse.quote('&'.join(filters))
-        return self.getFullUrl(f"/projects/{project_id}/branches/{branch_id}/issues?filter={filter_as_query}")
+        return self.getFullUrl(
+            f"/projects/{project_id}/branches/{branch_id}"
+            f"/issues?filter={filter_as_query}"
+        )
 
-    async def _NormalizedProjectAndIssues(self, session, runs, project_id, branch_id, project_name, filter):
-        issues = await self._getProjectIssues(session, project_id, branch_id, filter)
+    async def _NormalizedProjectAndIssues(
+            self, session, runs, project_id, branch_id, project_name, filter):
+        issues = await self._getProjectIssues(
+            session, project_id, branch_id, filter
+        )
 
         data = issues['data']
         if len(data) > 0:
@@ -179,15 +261,25 @@ class Polaris:
                 'project_name': project_name,
                 'project_id': project_id,
                 'branch_id': branch_id,
-                'direct-link': self.FormatProjectUrl(project_id, branch_id, filter),
-                'direct-link-untriaged': self.FormatProjectUrl(project_id, branch_id, untriaged_filter),
-                'issues': self.NormalizeIssues(data, issues['included'], runs, project_id, branch_id)
+                'direct-link': self.FormatProjectUrl(
+                    project_id, branch_id, filter
+                ),
+                'direct-link-untriaged': self.FormatProjectUrl(
+                    project_id, branch_id, untriaged_filter
+                ),
+                'issues': self.NormalizeIssues(
+                    data, issues['included'], runs, project_id, branch_id
+                ),
             }
 
-    def GetProjectsAndIssues(self, filter = None):
-        loop = asyncio.get_event_loop()
-        results = loop.run_until_complete(self._GetProjectsAndIssues(filter))
-        return results
+    def GetProjectsAndIssues(self, filter=None):
+        if sys.version_info >= (3, 7):
+            return asyncio.run(self._GetProjectsAndIssues(filter))
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(self._GetProjectsAndIssues(filter))
+        finally:
+            loop.close()
 
     async def _GetProjectsAndIssues(self, filter):
         projects = self._getProjects()
@@ -196,21 +288,38 @@ class Polaris:
         runs = []
 
         for include in projects['included']:
-            if include['type'] == 'branch' and include['attributes']['main-for-project']:
+            if (include['type'] == 'branch'
+                    and include['attributes']['main-for-project']):
                 branch_id = include['id']
                 project_id = include['relationships']['project']['data']['id']
-                project_name = [x for x in projects['data'] if x['id'] == project_id][0]['attributes']['name']
+                project_name = [
+                    x for x in projects['data']
+                    if x['id'] == project_id
+                ][0]['attributes']['name']
 
-                project_include.append({'project_id': project_id, 'branch_id': branch_id, 'project_name': project_name})
+                project_include.append({
+                    'project_id': project_id,
+                    'branch_id': branch_id,
+                    'project_name': project_name,
+                })
             elif include['type'] == 'run':
                 runs.append(include)
 
         project_with_issues = []
 
         async with aiohttp.ClientSession() as session:
-            project_with_issues = await asyncio.gather(*[self._NormalizedProjectAndIssues(session, runs, projectandinclude['project_id'], projectandinclude['branch_id'], projectandinclude['project_name'], filter) for projectandinclude in project_include])
+            project_with_issues = await asyncio.gather(*[
+                self._NormalizedProjectAndIssues(
+                    session, runs,
+                    projectandinclude['project_id'],
+                    projectandinclude['branch_id'],
+                    projectandinclude['project_name'],
+                    filter,
+                )
+                for projectandinclude in project_include
+            ])
 
-        # Remove None from list, None represents projects that didn't have any issues
+        # Filter out projects with no issues (None entries)
         project_with_issues = [x for x in project_with_issues if x is not None]
 
         return sorted(project_with_issues, key=lambda x: x['project_name'])
@@ -229,23 +338,37 @@ class Polaris:
         normalize_data['issue-key'] = issue['attributes']['issue-key']
         normalize_data['sub-tool'] = issue['attributes']['sub-tool']
         normalize_data['revision-id'] = issue['attributes']['revision-id']
-        normalize_data['latest-observed-on-run'] = issue['attributes']['latest-observed-on-run']
-        normalize_data['direct-link'] = self.FormatIssueUrl(project_id, branch_id, normalize_data['revision-id'], normalize_data['id'])
+        normalize_data['latest-observed-on-run'] = (
+            issue['attributes']['latest-observed-on-run']
+        )
+        normalize_data['direct-link'] = self.FormatIssueUrl(
+            project_id, branch_id,
+            normalize_data['revision-id'], normalize_data['id']
+        )
 
         return normalize_data
 
-    def NormalizeIssueRelationshipValues(self, normalized_data, relationship_key, value):
-        unique_keys = ['issue-type', 'issue-kind', 'latest-observed-on-run', 'path', 'severity']
+    def NormalizeIssueRelationshipValues(
+            self, normalized_data, relationship_key, value):
+        unique_keys = [
+            'issue-type', 'issue-kind', 'latest-observed-on-run',
+            'path', 'severity',
+        ]
 
         normalized_data[relationship_key] = value
         if 'attributes' in value[0]:
             if relationship_key in unique_keys:
                 if relationship_key == 'latest-observed-on-run':
-                    normalized_data['attributes'][relationship_key] = value[0]['id']
+                    normalized_data['attributes'][relationship_key] = (
+                        value[0]['id']
+                    )
                     normalized_data['attributes']['revision-id'] = \
                         value[0]['relationships']['revision']['data']['id']
-                elif relationship_key == 'path' and value[0]['attributes']['path-type'] == 'unknown':
-                    normalized_data[relationship_key] = '/'.join(value[0]['attributes'][relationship_key])
+                elif (relationship_key == 'path'
+                        and value[0]['attributes']['path-type'] == 'unknown'):
+                    normalized_data[relationship_key] = '/'.join(
+                        value[0]['attributes'][relationship_key]
+                    )
                 else:
                     normalized_data[relationship_key] = value[0]['attributes']
 
@@ -262,50 +385,86 @@ class Polaris:
                     continue  # yeet
                 normalized_data[key] = value
 
-            for relationship_key, relationship_value in issue['relationships'].items():
+            for relationship_key, relationship_value in (
+                    issue['relationships'].items()):
                 if relationship_key == 'transitions':
                     continue  # nope
-                if 'data' not in relationship_value or not relationship_value['data']:
+                if ('data' not in relationship_value
+                        or not relationship_value['data']):
                     continue
 
                 relationship_type = relationship_value['data']['type']
                 relationship_id = relationship_value['data']['id']
 
                 if relationship_key == 'latest-observed-on-run':
-                    value = [x for x in runs if x['type'] == relationship_type and x['id'] == relationship_id]
+                    value = [
+                        x for x in runs
+                        if x['type'] == relationship_type
+                        and x['id'] == relationship_id
+                    ]
                 else:
-                    value = [x for x in included if x['type'] == relationship_type and x['id'] == relationship_id]
+                    value = [
+                        x for x in included
+                        if x['type'] == relationship_type
+                        and x['id'] == relationship_id
+                    ]
 
                 if len(value) > 0:
-                    normalized_data = self.NormalizeIssueRelationshipValues(normalized_data, relationship_key, value)
-                #else:
-                #    print(f'{relationship_key} couldn\'t be found')
+                    normalized_data = self.NormalizeIssueRelationshipValues(
+                        normalized_data, relationship_key, value
+                    )
+                # else:
+                #     print(f'{relationship_key} couldn\'t be found')
 
-            issues.append(self.NormalizeIssue(normalized_data, project_id, branch_id))
+            issues.append(self.NormalizeIssue(
+                normalized_data, project_id, branch_id
+            ))
 
-        # Sort by severity rank, issue-type and path
-        return sorted(issues, key=lambda x: (int(ISSUE_SEVERITY_RANKS[x['severity']]), x['issue-type'], x['path']))
+        return sorted(
+            issues,
+            key=lambda x: (
+                int(ISSUE_SEVERITY_RANKS[x['severity']]),
+                x['issue-type'],
+                x['path'],
+            )
+        )
 
     def _request_with_retries(self, method, url, **kwargs):
         for attempt in range(self._retries):
             response = self._client.request(method, url, **kwargs)
             content_type = response.headers.get('Content-Type', '')
             try:
-                if ('application/vnd.api+json' not in content_type and 'application/json' not in content_type):
+                if ('application/vnd.api+json' not in content_type
+                        and 'application/json' not in content_type):
                     if attempt < self._retries - 1:
-                        print(f"Warning: Unexpected Content-Type '{content_type}' from Polaris. Retrying in {self._wait_seconds} seconds...", flush=True)
+                        print(
+                            f"Warning: Unexpected Content-Type"
+                            f" '{content_type}' from Polaris."
+                            f" Retrying in {self._wait_seconds} seconds...",
+                            flush=True
+                        )
                         time.sleep(self._wait_seconds)
                         continue
                     else:
                         raise RuntimeError(
-                            f"Failed: Unexpected Content-Type '{content_type}' from Polaris after {self._retries} attempts (HTTP {response.status_code})"
+                            f"Failed: Unexpected Content-Type"
+                            f" '{content_type}' from Polaris after"
+                            f" {self._retries} attempts"
+                            f" (HTTP {response.status_code})"
                         )
                 return response.json()
             except Exception:
                 if attempt < self._retries - 1:
-                    print(f"Warning: Unexpected response from Polaris (HTTP {response.status_code}). Retrying in {self._wait_seconds} seconds...", flush=True)
+                    print(
+                        f"Warning: Unexpected response from Polaris"
+                        f" (HTTP {response.status_code})."
+                        f" Retrying in {self._wait_seconds} seconds...",
+                        flush=True
+                    )
                     time.sleep(self._wait_seconds)
                 else:
                     raise RuntimeError(
-                        f"Failed: Unexpected response from Polaris after {self._retries} attempts (HTTP {response.status_code})"
+                        f"Failed: Unexpected response from Polaris"
+                        f" after {self._retries} attempts"
+                        f" (HTTP {response.status_code})"
                     )

@@ -1,8 +1,11 @@
 import requests
 import json
 
+
 def GroupIssuesByPriority(issues):
-    issue_per_priority = {'Critical': [], 'High': [], 'Medium': [], 'Low': [], 'Audit': []}
+    issue_per_priority = {
+        'Critical': [], 'High': [], 'Medium': [], 'Low': [], 'Audit': []
+    }
 
     for issue in issues:
         if not issue['severity'] in issue_per_priority:
@@ -12,15 +15,24 @@ def GroupIssuesByPriority(issues):
 
     return issue_per_priority
 
+
 def WidgetForIssue(issue_info):
 
     untriaged_issues_count = len(issue_info['untriaged-issues'])
-    untriaged_info = f"({untriaged_issues_count} not triaged)" if untriaged_issues_count > 0 else ""
+    untriaged_info = (
+        f"({untriaged_issues_count} not triaged)"
+        if untriaged_issues_count > 0
+        else ""
+    )
     return {
         "decoratedText": {
-            "text": f"{len(issue_info['issues'])} {issue_info['severity']} issues {untriaged_info}"
+            "text": (
+                f"{len(issue_info['issues'])} {issue_info['severity']}"
+                f" issues {untriaged_info}"
+            )
         }
     }
+
 
 def SeverityToColor(severity):
     if severity == 'Critical' or severity == 'High':
@@ -45,6 +57,7 @@ def SeverityToColor(severity):
           "alpha": 1
         }
 
+
 class Google:
 
     def __init__(self, webhook_url):
@@ -53,18 +66,26 @@ class Google:
     def _SummaryForProject(self, project):
 
         issues_per_priority = GroupIssuesByPriority(project['issues'])
-        untriaged_issues_per_priority = GroupIssuesByPriority(project['untriaged-issues'])
+        untriaged_issues_per_priority = GroupIssuesByPriority(
+            project['untriaged-issues']
+        )
 
         issues_by_severity = [
             {
                 'severity': severity,
                 'issues': issues,
-                'untriaged-issues': untriaged_issues_per_priority.get(severity, [])
+                'untriaged-issues': untriaged_issues_per_priority.get(
+                    severity, []
+                ),
             }
-            for (severity, issues) in issues_per_priority.items() if len(issues) > 0]
+            for (severity, issues) in issues_per_priority.items()
+            if len(issues) > 0
+        ]
 
         max_issue_level = issues_by_severity[0]['severity']
-        untriaged_issues = sum([len(info['untriaged-issues']) for info in issues_by_severity])
+        untriaged_issues = sum(
+            len(info['untriaged-issues']) for info in issues_by_severity
+        )
 
         link_to_issues = {
             "buttonList": {
@@ -86,7 +107,7 @@ class Google:
             link_to_issues['buttonList']['buttons'] += [
                 {
                   "text": "Untriaged issues",
-                 #"color": SeverityToColor(max_issue_level),
+                  # "color": SeverityToColor(max_issue_level),
                   "onClick": {
                     "openLink": {
                       "url": project['direct-link-untriaged']
@@ -95,20 +116,30 @@ class Google:
                 }
             ]
 
+        widgets = (
+            list(map(WidgetForIssue, issues_by_severity)) + [link_to_issues]
+        )
         return {
             "header": project['project_name'],
-            "widgets": list(map(WidgetForIssue, issues_by_severity)) +
-                       [link_to_issues],
+            "widgets": widgets,
         }
 
-    def SendSummaryMessage(self, normalized_projects, normalized_projects_only_untriaged, filter):
+    def SendSummaryMessage(
+            self, normalized_projects, normalized_projects_only_untriaged,
+            filter):
         total_issues = 0
         total_untriaged_issues = 0
         for project in normalized_projects:
             total_issues += len(project['issues'])
 
-            same_projects = [other_project for other_project in normalized_projects_only_untriaged if other_project['project_id'] == project['project_id']]
-            project['untriaged-issues'] = same_projects[0]['issues'] if len(same_projects) > 0 else []
+            same_projects = [
+                other_project
+                for other_project in normalized_projects_only_untriaged
+                if other_project['project_id'] == project['project_id']
+            ]
+            project['untriaged-issues'] = (
+                same_projects[0]['issues'] if same_projects else []
+            )
             total_untriaged_issues += len(project['untriaged-issues'])
 
         summary = {
@@ -118,9 +149,16 @@ class Google:
                     "card": {
                         "header": {
                             "title": "Summary of polaris tickets",
-                            "subtitle": f"There are {total_issues} issues in {len(normalized_projects)} projects. {total_untriaged_issues} issues need to be triaged"
+                            "subtitle": (
+                                f"There are {total_issues} issues in"
+                                f" {len(normalized_projects)} projects."
+                                f" {total_untriaged_issues} issues need"
+                                " to be triaged"
+                            ),
                         },
-                        "sections": list(map(self._SummaryForProject, normalized_projects))
+                        "sections": list(map(
+                            self._SummaryForProject, normalized_projects
+                        )),
                     }
                 }
             ],
@@ -130,4 +168,6 @@ class Google:
             'Content-Type': 'application/json'
         }
         client = requests.Session()
-        client.post(self.webhook_url, headers=headers, data=json.dumps(summary))
+        client.post(
+            self.webhook_url, headers=headers, data=json.dumps(summary)
+        )
