@@ -5,18 +5,24 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-  
+    # Security updates only: disable version-update PRs
+    open-pull-requests-limit: 0
+
   # Enable version updates for Docker
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
-  
+    # Security updates only: disable version-update PRs
+    open-pull-requests-limit: 0
+
   # Enable version updates for python
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
+    # Security updates only: disable version-update PRs
+    open-pull-requests-limit: 0
     groups:
       python-dependencies:
         applies-to: security-updates
